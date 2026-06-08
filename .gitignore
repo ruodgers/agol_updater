@@ -1,0 +1,39 @@
+# Ambientes virtuais
+venv/
+env/
+.env
+
+# Diretórios de build e distribuição
+build/
+dist/
+*.spec
+
+# Caches do Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Arquivos de log e testes locais
+logs/
+run_output.txt
+test_utc.py
+
+# Arquivos sensíveis / Anotações
+links e id.txt
+camadas_ids.json
+backups/
+limpar_html.py
+config/
+Agol_Updater_v1.py
+Agol_Updater_v2.py
+tratamentos/Tratamento_Roubo.py
+tratamentos/Tratamento_Furto.py
+tratamentos/Tratamento_Interior.py
+tratamentos/Tratamento_190.py
+
+# IDEs
+.vscode/
+.idea/
+.gemini/
