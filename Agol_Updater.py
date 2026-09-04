@@ -407,7 +407,17 @@ class ArcGISUpdaterApp:
         self._apply_menu_colors()
 
     def _apply_menu_colors(self):
-        for om in [getattr(self, 'treatment_menu', None)]:
+        menus = [
+            getattr(self, 'treatment_menu', None),
+            getattr(self, 'sheet_menu', None),
+            getattr(self, 'geo_ind_menu', None),
+            getattr(self, 'geo_col_menu', None),
+            getattr(self, 'month_menu', None),
+            getattr(self, 'month_col_menu', None),
+            getattr(self, 'year_menu', None),
+            getattr(self, 'year_col_menu', None),
+        ]
+        for om in menus:
             if om:
                 try:
                     om['menu'].configure(
@@ -415,8 +425,8 @@ class ArcGISUpdaterApp:
                         activebackground=COLORS['bg_hover'], activeforeground=COLORS['text'],
                         bd=0, relief="flat"
                     )
-                except Exception as e:
-                    print(f"Erro ao atualizar cor do menu: {e}")
+                except Exception:
+                    pass
 
     def refresh_treatment_menu(self):
         if not hasattr(self, 'treatment_menu'):
@@ -631,25 +641,18 @@ class ArcGISUpdaterApp:
         )
         self.geo_col_menu.grid(row=3, column=3, padx=(0, 12), pady=5, sticky=tk.W)
 
-        # Seletor de mês(es) do fato
-        ttk.Label(source_card, text="Mês(es) do Fato:", style="Card.TLabel").grid(
+        # Seletor de mês do fato
+        ttk.Label(source_card, text="Mês do Fato:", style="Card.TLabel").grid(
             row=4, column=0, padx=(12, 5), pady=5, sticky=tk.W)
 
-        month_frame = ttk.Frame(source_card, style="CardInner.TFrame")
-        month_frame.grid(row=4, column=1, padx=5, pady=5, sticky=tk.W)
-
-        self.months_summary_var = tk.StringVar(value="Todos os Meses")
-        self.months_entry = self._make_entry(month_frame, self.months_summary_var, width=30)
-        self.months_entry.configure(state="readonly")
-        self.months_entry.pack(side=tk.LEFT, padx=(0, 5))
-
-        self.btn_select_months = ttk.Button(
-            month_frame,
-            text="Selecionar Meses...",
-            style="Secondary.TButton",
-            command=self._open_month_selection_dialog
+        self.month_var = tk.StringVar(value="Todos")
+        self.month_menu = ttk.OptionMenu(
+            source_card,
+            self.month_var,
+            "Todos",
+            *MONTHS_LIST
         )
-        self.btn_select_months.pack(side=tk.LEFT)
+        self.month_menu.grid(row=4, column=1, padx=5, pady=5, sticky=tk.W)
 
         ttk.Label(source_card, text="Coluna do Mês:", style="Card.TLabel").grid(
             row=4, column=2, padx=(15, 5), pady=5, sticky=tk.W)
@@ -662,25 +665,19 @@ class ArcGISUpdaterApp:
         )
         self.month_col_menu.grid(row=4, column=3, padx=(0, 12), pady=5, sticky=tk.W)
 
-        # Seletor de ano(s) do fato
-        ttk.Label(source_card, text="Ano(s) do Fato:", style="Card.TLabel").grid(
+        # Seletor de ano do fato
+        ttk.Label(source_card, text="Ano do Fato:", style="Card.TLabel").grid(
             row=5, column=0, padx=(12, 5), pady=(5, 10), sticky=tk.W)
 
-        year_frame = ttk.Frame(source_card, style="CardInner.TFrame")
-        year_frame.grid(row=5, column=1, padx=5, pady=(5, 10), sticky=tk.W)
-
-        self.years_summary_var = tk.StringVar(value="Todos os Anos")
-        self.years_entry = self._make_entry(year_frame, self.years_summary_var, width=30)
-        self.years_entry.configure(state="readonly")
-        self.years_entry.pack(side=tk.LEFT, padx=(0, 5))
-
-        self.btn_select_years = ttk.Button(
-            year_frame,
-            text="Selecionar Anos...",
-            style="Secondary.TButton",
-            command=self._open_year_selection_dialog
+        default_years = ["Todos"] + [str(y) for y in sorted(self.available_years, reverse=True)]
+        self.year_var = tk.StringVar(value="Todos")
+        self.year_menu = ttk.OptionMenu(
+            source_card,
+            self.year_var,
+            "Todos",
+            *default_years
         )
-        self.btn_select_years.pack(side=tk.LEFT)
+        self.year_menu.grid(row=5, column=1, padx=5, pady=(5, 10), sticky=tk.W)
 
         ttk.Label(source_card, text="Coluna do Ano:", style="Card.TLabel").grid(
             row=5, column=2, padx=(15, 5), pady=(5, 10), sticky=tk.W)
@@ -1100,193 +1097,47 @@ class ArcGISUpdaterApp:
                     self.available_years.append(y)
             self.available_years.sort()
 
-    def _open_month_selection_dialog(self):
-        """Abre janela modal para seleção livre de 1 ou mais meses."""
-        dialog = tk.Toplevel(self.master)
-        dialog.title("Selecionar Mês(es)")
-        dialog.geometry("440x360")
-        dialog.configure(bg=COLORS['bg_card'])
-        dialog.resizable(False, False)
-        dialog.transient(self.master)
-        dialog.grab_set()
+    def _update_year_menu(self, years_list):
+        """Atualiza o dropdown de seleção do Ano do Fato com 'Todos' + anos detectados."""
+        seen = set()
+        clean_years = []
+        for y in years_list:
+            y_str = str(y).strip()
+            if y_str and y_str not in seen and y_str != "Todos":
+                seen.add(y_str)
+                clean_years.append(y_str)
 
-        ttk.Label(
-            dialog,
-            text="Selecione um ou mais meses:",
-            style="Card.TLabel",
-            font=tkfont.Font(family="Segoe UI", size=11, weight="bold")
-        ).pack(padx=15, pady=(15, 10), anchor=tk.W)
+        opts = ["Todos"] + sorted(clean_years, reverse=True)
+        curr = self.year_var.get() if hasattr(self, 'year_var') else "Todos"
+        if curr not in opts:
+            if hasattr(self, 'year_var'):
+                self.year_var.set("Todos")
 
-        action_frame = ttk.Frame(dialog, style="CardInner.TFrame")
-        action_frame.pack(fill=tk.X, padx=15, pady=(0, 10))
-
-        months_only = MONTHS_LIST[1:]
-        check_vars = {}
-
-        current_selected = set(self.selected_months) if self.selected_months else set(months_only)
-
-        for m in months_only:
-            var = tk.BooleanVar(value=(m in current_selected))
-            check_vars[m] = var
-
-        def select_all():
-            for v in check_vars.values():
-                v.set(True)
-
-        def deselect_all():
-            for v in check_vars.values():
-                v.set(False)
-
-        ttk.Button(action_frame, text="Marcar Todos", style="Small.TButton", command=select_all).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(action_frame, text="Desmarcar Todos", style="Small.TButton", command=deselect_all).pack(side=tk.LEFT)
-
-        grid_frame = ttk.Frame(dialog, style="CardInner.TFrame")
-        grid_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=5)
-
-        for idx, m in enumerate(months_only):
-            r = idx // 3
-            c = idx % 3
-            cb = tk.Checkbutton(
-                grid_frame,
-                text=m,
-                variable=check_vars[m],
-                bg=COLORS['bg_card'],
-                fg=COLORS['text'],
-                selectcolor=COLORS['bg_secondary'],
-                activebackground=COLORS['bg_card'],
-                activeforeground=COLORS['text'],
-                font=self.font_body
-            )
-            cb.grid(row=r, column=c, sticky=tk.W, padx=8, pady=6)
-
-        def on_confirm():
-            new_selected = {m for m, v in check_vars.items() if v.get()}
-            if len(new_selected) == 0 or len(new_selected) == len(months_only):
-                self.selected_months = set()
-                self.months_summary_var.set("Todos os Meses")
-            else:
-                self.selected_months = new_selected
-                ordered = [m for m in months_only if m in new_selected]
-                if len(ordered) <= 3:
-                    self.months_summary_var.set(", ".join(ordered))
-                else:
-                    self.months_summary_var.set(f"{len(ordered)} meses ({', '.join(ordered[:2])}...)")
-            dialog.destroy()
-
-        btn_frame = ttk.Frame(dialog, style="CardInner.TFrame")
-        btn_frame.pack(fill=tk.X, padx=15, pady=(10, 15))
-        ttk.Button(btn_frame, text="Confirmar", style="Accent.TButton", command=on_confirm).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(btn_frame, text="Cancelar", style="Secondary.TButton", command=dialog.destroy).pack(side=tk.RIGHT)
-
-    def _open_year_selection_dialog(self):
-        """Abre janela modal para seleção livre de 1 ou mais anos."""
-        dialog = tk.Toplevel(self.master)
-        dialog.title("Selecionar Ano(s)")
-        dialog.geometry("460x420")
-        dialog.configure(bg=COLORS['bg_card'])
-        dialog.resizable(False, False)
-        dialog.transient(self.master)
-        dialog.grab_set()
-
-        ttk.Label(
-            dialog,
-            text="Selecione um ou mais anos:",
-            style="Card.TLabel",
-            font=tkfont.Font(family="Segoe UI", size=11, weight="bold")
-        ).pack(padx=15, pady=(15, 10), anchor=tk.W)
-
-        action_frame = ttk.Frame(dialog, style="CardInner.TFrame")
-        action_frame.pack(fill=tk.X, padx=15, pady=(0, 10))
-
-        check_vars = {}
-        current_selected = set(self.selected_years) if self.selected_years else set(self.available_years)
-
-        for y in self.available_years:
-            var = tk.BooleanVar(value=(y in current_selected))
-            check_vars[y] = var
-
-        def select_all():
-            for v in check_vars.values():
-                v.set(True)
-
-        def deselect_all():
-            for v in check_vars.values():
-                v.set(False)
-
-        ttk.Button(action_frame, text="Marcar Todos", style="Small.TButton", command=select_all).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(action_frame, text="Desmarcar Todos", style="Small.TButton", command=deselect_all).pack(side=tk.LEFT)
-
-        grid_frame = ttk.Frame(dialog, style="CardInner.TFrame")
-        grid_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=5)
-
-        def refresh_grid():
-            for child in grid_frame.winfo_children():
-                child.destroy()
-
-            sorted_years = sorted(list(check_vars.keys()))
-            for idx, y in enumerate(sorted_years):
-                r = idx // 4
-                c = idx % 4
-                cb = tk.Checkbutton(
-                    grid_frame,
-                    text=str(y),
-                    variable=check_vars[y],
-                    bg=COLORS['bg_card'],
-                    fg=COLORS['text'],
-                    selectcolor=COLORS['bg_secondary'],
-                    activebackground=COLORS['bg_card'],
-                    activeforeground=COLORS['text'],
-                    font=self.font_body
+        if hasattr(self, 'year_menu'):
+            try:
+                m = self.year_menu["menu"]
+                m.delete(0, "end")
+                for opt in opts:
+                    m.add_command(label=opt, command=tk._setit(self.year_var, opt))
+                m.configure(
+                    bg=COLORS['bg_input'], fg=COLORS['text'],
+                    activebackground=COLORS['bg_hover'], activeforeground=COLORS['text'],
+                    bd=0, relief="flat"
                 )
-                cb.grid(row=r, column=c, sticky=tk.W, padx=6, pady=4)
-
-        refresh_grid()
-
-        add_frame = ttk.Frame(dialog, style="CardInner.TFrame")
-        add_frame.pack(fill=tk.X, padx=15, pady=(5, 5))
-
-        ttk.Label(add_frame, text="Outro ano:", style="Card.TLabel").pack(side=tk.LEFT, padx=(0, 5))
-        custom_year_var = tk.StringVar()
-        custom_entry = self._make_entry(add_frame, custom_year_var, width=10)
-        custom_entry.pack(side=tk.LEFT, padx=(0, 5))
-
-        def add_custom_year():
-            val = custom_year_var.get().strip()
-            if val.isdigit() and len(val) == 4:
-                y_int = int(val)
-                if y_int not in self.available_years:
-                    self.available_years.append(y_int)
-                    self.available_years.sort()
-                check_vars[y_int] = tk.BooleanVar(value=True)
-                custom_year_var.set("")
-                refresh_grid()
-            else:
-                messagebox.showerror("Erro", "Digite um ano válido com 4 dígitos (ex: 2017).", parent=dialog)
-
-        ttk.Button(add_frame, text="+ Adicionar", style="Small.TButton", command=add_custom_year).pack(side=tk.LEFT)
-
-        def on_confirm():
-            new_selected = {y for y, v in check_vars.items() if v.get()}
-            if len(new_selected) == 0 or len(new_selected) == len(self.available_years):
-                self.selected_years = set()
-                self.years_summary_var.set("Todos os Anos")
-            else:
-                self.selected_years = new_selected
-                ordered = sorted(list(new_selected))
-                if len(ordered) <= 3:
-                    self.years_summary_var.set(", ".join(map(str, ordered)))
-                else:
-                    self.years_summary_var.set(f"{len(ordered)} anos ({', '.join(map(str, ordered[:2]))}...)")
-            dialog.destroy()
-
-        btn_frame = ttk.Frame(dialog, style="CardInner.TFrame")
-        btn_frame.pack(fill=tk.X, padx=15, pady=(10, 15))
-        ttk.Button(btn_frame, text="Confirmar", style="Accent.TButton", command=on_confirm).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(btn_frame, text="Cancelar", style="Secondary.TButton", command=dialog.destroy).pack(side=tk.RIGHT)
+            except Exception:
+                pass
 
     def _update_period_column_menus(self, col_list):
         """Atualiza os dropdowns de seleção da coluna geográfica, de mês e de ano com as colunas disponíveis."""
-        options = ["Detectar Automaticamente"] + list(col_list)
+        seen = set()
+        clean_list = []
+        for c in col_list:
+            c_str = str(c).strip()
+            if c_str and c_str not in seen and c_str != "Detectar Automaticamente":
+                seen.add(c_str)
+                clean_list.append(c_str)
+
+        options = ["Detectar Automaticamente"] + clean_list
 
         for menu_widget, var_widget in [
             (getattr(self, 'geo_col_menu', None), getattr(self, 'geo_col_var', None)),
@@ -1305,6 +1156,11 @@ class ArcGISUpdaterApp:
                 m.delete(0, "end")
                 for opt in options:
                     m.add_command(label=opt, command=tk._setit(var_widget, opt))
+                m.configure(
+                    bg=COLORS['bg_input'], fg=COLORS['text'],
+                    activebackground=COLORS['bg_hover'], activeforeground=COLORS['text'],
+                    bd=0, relief="flat"
+                )
             except Exception:
                 pass
     def _build_statusbar(self):
@@ -1488,9 +1344,9 @@ class ArcGISUpdaterApp:
             self.treatment_menu.config(state=app_state)
             if hasattr(self, 'geo_ind_menu'): self.geo_ind_menu.config(state=app_state)
             if hasattr(self, 'geo_col_menu'): self.geo_col_menu.config(state=app_state)
-            self.btn_select_months.config(state=app_state)
-            self.btn_select_years.config(state=app_state)
+            if hasattr(self, 'month_menu'): self.month_menu.config(state=app_state)
             if hasattr(self, 'month_col_menu'): self.month_col_menu.config(state=app_state)
+            if hasattr(self, 'year_menu'): self.year_menu.config(state=app_state)
             if hasattr(self, 'year_col_menu'): self.year_col_menu.config(state=app_state)
             self.item_id_entry.config(state=app_state)
             self.fetch_button.config(state=app_state)
@@ -1517,9 +1373,9 @@ class ArcGISUpdaterApp:
             self.treatment_menu,
             getattr(self, 'geo_ind_menu', None),
             getattr(self, 'geo_col_menu', None),
-            self.btn_select_months,
-            self.btn_select_years,
+            getattr(self, 'month_menu', None),
             getattr(self, 'month_col_menu', None),
+            getattr(self, 'year_menu', None),
             getattr(self, 'year_col_menu', None),
             self.item_id_entry,
             self.fetch_button,
@@ -1621,10 +1477,10 @@ class ArcGISUpdaterApp:
                 self.master.after(0, lambda: self.toggle_app_sections(False))
 
     # =====================
-    # CARREGAR CAMPOS
+    # CARREGAR CAMPOS E ESTRUTURA DO EXCEL
     # =====================
     def on_treatment_change(self, *args):
-        """Atualiza o Item ID ao trocar o tipo de tratamento."""
+        """Atualiza o Item ID ao trocar o tipo de tratamento e reavalia colunas."""
         selected_raw = self.treatment_var.get().strip()
 
         item_id = self.item_ids.get(selected_raw)
@@ -1647,54 +1503,171 @@ class ArcGISUpdaterApp:
             elif "interior" in treatment_lower:
                 self.geo_ind_var.set("Interior")
 
+        filepath = self.excel_path_var.get().strip() if hasattr(self, 'excel_path_var') else ""
+        if filepath and os.path.exists(filepath):
+            current_sheet = self.sheet_var.get().strip() if hasattr(self, 'sheet_var') else None
+            threading.Thread(
+                target=self._async_load_sheets_and_columns,
+                args=(filepath, current_sheet),
+                daemon=True
+            ).start()
+
     def browse_file(self):
         filepath = filedialog.askopenfilename(
             title="Selecione o arquivo Excel",
-            filetypes=(("Arquivos Excel", "*.xlsx *.xls"), ("Todos os arquivos", "*.*"))
+            filetypes=(("Arquivos Excel", "*.xlsx *.xls *.xlsm *.xlsb"), ("Todos os arquivos", "*.*"))
         )
         if filepath:
             self.excel_path_var.set(filepath)
-            self._load_excel_sheets(filepath)
+            self.set_status(f"Lendo estrutura do arquivo: {os.path.basename(filepath)}...")
+            self.log_message(f"Arquivo selecionado: {filepath}. Lendo abas e colunas em segundo plano...")
+            threading.Thread(
+                target=self._async_load_sheets_and_columns,
+                args=(filepath, None),
+                daemon=True
+            ).start()
 
-    def _load_excel_sheets(self, filepath):
-        """Lê os nomes das abas da planilha e atualiza o dropdown de abas."""
+    def on_sheet_selected(self, sheet_name):
+        """Ao escolher uma aba no dropdown, atualiza as colunas e anos daquela aba."""
+        self.sheet_var.set(sheet_name)
+        filepath = self.excel_path_var.get().strip() if hasattr(self, 'excel_path_var') else ""
+        if filepath and os.path.exists(filepath):
+            self.set_status(f"Lendo colunas da aba '{sheet_name}'...")
+            self.log_message(f"Aba alterada para '{sheet_name}'. Recarregando colunas...")
+            threading.Thread(
+                target=self._async_load_sheets_and_columns,
+                args=(filepath, sheet_name),
+                daemon=True
+            ).start()
+
+    def _async_load_sheets_and_columns(self, filepath, target_sheet=None):
+        """Lê as abas, as colunas e os anos presentes na planilha em segundo plano sem travar a interface."""
         try:
             if not filepath or not os.path.exists(filepath):
                 return
-            import openpyxl
-            wb = openpyxl.load_workbook(filepath, read_only=True, keep_links=False)
-            sheets = list(wb.sheetnames)
-            wb.close()
+
+            sheets = []
+            # 1. Leitura rápida das abas
+            ext = os.path.splitext(filepath)[1].lower()
+            if ext in ['.xlsx', '.xlsm']:
+                try:
+                    import openpyxl
+                    wb = openpyxl.load_workbook(filepath, read_only=True, keep_links=False, data_only=True)
+                    sheets = list(wb.sheetnames)
+                    wb.close()
+                except Exception:
+                    pass
+
+            if not sheets:
+                try:
+                    xl = pd.ExcelFile(filepath)
+                    sheets = list(xl.sheet_names)
+                except Exception:
+                    pass
+
             if not sheets:
                 sheets = ["Plan1"]
-        except Exception:
+
+            # 2. Determinar aba selecionada
+            if target_sheet and target_sheet in sheets:
+                chosen_sheet = target_sheet
+            else:
+                curr = self.sheet_var.get().strip() if hasattr(self, 'sheet_var') else ""
+                if curr and curr in sheets:
+                    chosen_sheet = curr
+                else:
+                    preferred = None
+                    for cand in ['INDICADORES', 'Indicadores', 'Base', 'BASE', 'Dados', 'Plan1', 'Planilha1']:
+                        if cand in sheets:
+                            preferred = cand
+                            break
+                    chosen_sheet = preferred if preferred else sheets[0]
+
+            # 3. Ler amostra da aba (1000 linhas) para extrair colunas e anos reais
+            clean_cols = []
+            detected_years = set()
             try:
-                xl = pd.ExcelFile(filepath)
-                sheets = list(xl.sheet_names)
-            except Exception:
-                sheets = ["Plan1"]
+                df_sample = pd.read_excel(filepath, sheet_name=chosen_sheet, nrows=1000)
+                raw_cols = [str(c).strip() for c in df_sample.columns]
+                clean_cols = [c for c in raw_cols if c and not c.startswith('Unnamed:')]
+                if not clean_cols:
+                    clean_cols = raw_cols
 
-        self.available_sheets = sheets
+                # Detectar anos na amostra
+                for col in df_sample.columns:
+                    col_u = str(col).upper()
+                    if any(k in col_u for k in ['ANO', 'YEAR', 'DATA', 'DATE', 'GERACAO', 'FATO']):
+                        series = df_sample[col].dropna()
+                        num_vals = pd.to_numeric(series, errors='coerce').dropna()
+                        for v in num_vals:
+                            if 2000 <= v <= 2050:
+                                detected_years.add(int(v))
+                        if not detected_years or len(detected_years) < 2:
+                            dt_vals = pd.to_datetime(series, dayfirst=True, errors='coerce').dropna()
+                            for d in dt_vals:
+                                if 2000 <= d.year <= 2050:
+                                    detected_years.add(int(d.year))
+            except Exception as e:
+                self.log_message(f"Aviso ao analisar aba '{chosen_sheet}': {e}")
+                try:
+                    df_h = pd.read_excel(filepath, sheet_name=chosen_sheet, nrows=0)
+                    clean_cols = [str(c).strip() for c in df_h.columns if str(c).strip() and not str(c).startswith('Unnamed:')]
+                except Exception:
+                    clean_cols = []
 
-        # Seleciona aba prioritária: se existir 'INDICADORES', 'Base', etc., usa ela; senão usa a 1ª
-        preferred = None
-        for cand in ['INDICADORES', 'Indicadores', 'Base', 'BASE', 'Dados', 'Plan1', 'Planilha1']:
-            if cand in sheets:
-                preferred = cand
-                break
-        chosen_sheet = preferred if preferred else sheets[0]
+            # Anos padrão recentes se nada detectado
+            if not detected_years:
+                current_year = datetime.now().year
+                detected_years = {current_year - 2, current_year - 1, current_year, current_year + 1}
 
-        if hasattr(self, 'sheet_var'):
-            self.sheet_var.set(chosen_sheet)
-        if hasattr(self, 'sheet_menu'):
-            try:
-                m = self.sheet_menu["menu"]
-                m.delete(0, "end")
-                for s in sheets:
-                    m.add_command(label=s, command=tk._setit(self.sheet_var, s))
-            except Exception:
-                pass
-        self.log_message(f"Arquivo Excel carregado: {len(sheets)} aba(s) detectada(s) ({', '.join(sheets)}). Aba ativa: '{chosen_sheet}'.")
+            sorted_years = sorted(list(detected_years), reverse=True)
+
+            # 4. Simular colunas geradas pelo tratamento
+            treatment_type = self.treatment_var.get().strip() if hasattr(self, 'treatment_var') else ""
+            all_cols = list(clean_cols)
+            if treatment_type:
+                process_func = self.treatment_functions.get(treatment_type)
+                if process_func and clean_cols:
+                    try:
+                        dummy_df = pd.DataFrame(columns=clean_cols)
+                        p_df = process_func(dummy_df, lambda m: None)
+                        for c in p_df.columns:
+                            c_str = str(c).strip()
+                            if c_str and c_str not in all_cols:
+                                all_cols.append(c_str)
+                    except Exception:
+                        pass
+
+            # 5. Despachar para a UI na thread principal
+            def apply_loaded_info(s_list, sel_sheet, cols, years_list):
+                self.available_sheets = s_list
+                if hasattr(self, 'sheet_var'):
+                    self.sheet_var.set(sel_sheet)
+                if hasattr(self, 'sheet_menu'):
+                    try:
+                        m = self.sheet_menu["menu"]
+                        m.delete(0, "end")
+                        for s in s_list:
+                            m.add_command(label=s, command=lambda val=s: self.on_sheet_selected(val))
+                    except Exception:
+                        pass
+
+                self._update_period_column_menus(cols)
+                self._update_year_menu(years_list)
+                self._apply_menu_colors()
+
+                years_str = ", ".join(map(str, years_list))
+                self.log_message(
+                    f"Planilha pronta: {len(s_list)} aba(s) detectada(s). Aba ativa: '{sel_sheet}'. "
+                    f"{len(cols)} colunas disponíveis. Anos identificados: [{years_str}]."
+                )
+                self.set_status("Pronto.")
+
+            self.master.after(0, lambda: apply_loaded_info(sheets, chosen_sheet, all_cols, sorted_years))
+
+        except Exception as err:
+            self.log_message(f"Erro ao carregar estrutura do Excel: {err}")
+            self.set_status("Erro ao ler Excel.")
 
     def start_fetch_fields(self):
         excel_path = self.excel_path_var.get()
@@ -2236,11 +2209,18 @@ class ArcGISUpdaterApp:
                     )
 
             # --- FILTRO DE MÊS ---
-            if self.selected_months and len(self.selected_months) < 12:
-                selected_month_nums = {MONTHS_LIST.index(m) for m in self.selected_months if m in MONTHS_LIST}
+            selected_month = self.month_var.get().strip() if hasattr(self, 'month_var') else "Todos"
+            if selected_month and selected_month != "Todos":
                 count_before_month = len(df)
-
                 selected_m_col = self.month_col_var.get().strip() if hasattr(self, 'month_col_var') else "Detectar Automaticamente"
+
+                month_num = MONTH_NAME_TO_NUM.get(selected_month.upper())
+                if month_num is None:
+                    try:
+                        month_num = MONTHS_LIST.index(selected_month)
+                    except Exception:
+                        month_num = None
+
                 month_col = None
                 month_type = None  # 'num' ou 'name'
 
@@ -2265,38 +2245,50 @@ class ArcGISUpdaterApp:
                                 month_type = 'name'
                                 break
 
-                if month_col and month_type == 'num':
-                    df[month_col] = pd.to_numeric(df[month_col], errors='coerce')
-                    df = df[df[month_col].isin(selected_month_nums)].copy()
-                    months_str = ", ".join(sorted(list(self.selected_months)))
+                if month_col and month_type == 'num' and month_num is not None:
+                    numeric_series = pd.to_numeric(df[month_col], errors='coerce')
+                    df = df[numeric_series == month_num].copy()
                     self.log_message(
-                        f"Filtrado por mês(es) [{months_str}] na coluna '{month_col}'. "
+                        f"Filtrado por mês '{selected_month}' (#{month_num}) na coluna '{month_col}'. "
                         f"Registros: {count_before_month} -> {len(df)}"
                     )
                 elif month_col and month_type == 'name':
-                    allowed_names = set()
-                    for m_name in self.selected_months:
-                        m_up = m_name.upper()
-                        m_norm = m_up.replace('Ç', 'C').replace('ç', 'c')
-                        allowed_names.add(m_up)
-                        allowed_names.add(m_norm)
+                    m_up = selected_month.upper()
+                    m_norm = m_up.replace('Ç', 'C').replace('ç', 'c')
+                    allowed_names = {m_up, m_norm}
                     df = df[
                         df[month_col].astype(str).str.upper().str.strip().isin(allowed_names)
                     ].copy()
-                    months_str = ", ".join(sorted(list(self.selected_months)))
                     self.log_message(
-                        f"Filtrado por mês(es) [{months_str}] na coluna '{month_col}'. "
+                        f"Filtrado por mês '{selected_month}' na coluna '{month_col}'. "
                         f"Registros: {count_before_month} -> {len(df)}"
                     )
                 else:
-                    self.log_message(
-                        f"AVISO: Mês(es) selecionado(s) [{', '.join(sorted(list(self.selected_months)))}] mas nenhuma coluna de mês "
-                        f"encontrada ou válida. Coluna especificada: '{selected_m_col}'. Filtro de mês não aplicado."
-                    )
+                    date_col = None
+                    for candidate in ['DT_INICIO_FATO', 'DATA_FATO', 'DATA', 'geracao', 'dt_geracao', 'DATA_OCORRENCIA']:
+                        if candidate in df.columns:
+                            date_col = candidate
+                            break
+                    if date_col and month_num is not None:
+                        try:
+                            temp_dates = pd.to_datetime(df[date_col], dayfirst=True, errors='coerce')
+                            df = df[temp_dates.dt.month == month_num].copy()
+                            self.log_message(
+                                f"Filtrado por mês '{selected_month}' extraído da coluna '{date_col}'. "
+                                f"Registros: {count_before_month} -> {len(df)}"
+                            )
+                        except Exception as me_err:
+                            self.log_message(f"AVISO: Falha ao extrair mês de '{date_col}': {me_err}")
+                    else:
+                        self.log_message(
+                            f"AVISO: Mês '{selected_month}' selecionado mas nenhuma coluna de mês "
+                            f"encontrada ou válida. Coluna especificada: '{selected_m_col}'. Filtro de mês não aplicado."
+                        )
 
             # --- FILTRO DE ANO ---
-            if self.selected_years and len(self.selected_years) < len(self.available_years):
-                selected_year_nums = {int(y) for y in self.selected_years if str(y).isdigit()}
+            selected_year = self.year_var.get().strip() if hasattr(self, 'year_var') else "Todos"
+            if selected_year and selected_year != "Todos" and selected_year.isdigit():
+                target_year = int(selected_year)
                 count_before_year = len(df)
 
                 selected_y_col = self.year_col_var.get().strip() if hasattr(self, 'year_col_var') else "Detectar Automaticamente"
@@ -2314,37 +2306,35 @@ class ArcGISUpdaterApp:
                     parsed_years = pd.to_numeric(df[year_col], errors='coerce')
                     if parsed_years.dropna().empty:
                         try:
-                            parsed_dts = pd.to_datetime(df[year_col], errors='coerce')
+                            parsed_dts = pd.to_datetime(df[year_col], dayfirst=True, errors='coerce')
                             parsed_years = parsed_dts.dt.year
                         except Exception:
                             pass
 
-                    df = df[parsed_years.isin(selected_year_nums)].copy()
-                    years_str = ", ".join(map(str, sorted(list(selected_year_nums))))
+                    df = df[parsed_years == target_year].copy()
                     self.log_message(
-                        f"Filtrado por ano(s) [{years_str}] na coluna '{year_col}'. "
+                        f"Filtrado por ano '{target_year}' na coluna '{year_col}'. "
                         f"Registros: {count_before_year} -> {len(df)}"
                     )
                 else:
                     date_col = None
-                    for candidate in ['DT_INICIO_FATO', 'DATA_FATO', 'DATA', 'dt_geracao', 'DATA_OCORRENCIA']:
+                    for candidate in ['DT_INICIO_FATO', 'DATA_FATO', 'DATA', 'geracao', 'dt_geracao', 'DATA_OCORRENCIA']:
                         if candidate in df.columns:
                             date_col = candidate
                             break
                     if date_col:
                         try:
-                            temp_dates = pd.to_datetime(df[date_col], errors='coerce')
-                            df = df[temp_dates.dt.year.isin(selected_year_nums)].copy()
-                            years_str = ", ".join(map(str, sorted(list(selected_year_nums))))
+                            temp_dates = pd.to_datetime(df[date_col], dayfirst=True, errors='coerce')
+                            df = df[temp_dates.dt.year == target_year].copy()
                             self.log_message(
-                                f"Filtrado por ano(s) [{years_str}] extraído da coluna '{date_col}'. "
+                                f"Filtrado por ano '{target_year}' extraído da coluna '{date_col}'. "
                                 f"Registros: {count_before_year} -> {len(df)}"
                             )
                         except Exception as ye_err:
                             self.log_message(f"AVISO: Falha ao extrair ano de '{date_col}': {ye_err}")
                     else:
                         self.log_message(
-                            f"AVISO: Ano(s) selecionado(s) [{', '.join(map(str, sorted(list(selected_year_nums))))}] mas nenhuma coluna de ano "
+                            f"AVISO: Ano '{target_year}' selecionado mas nenhuma coluna de ano "
                             f"encontrada ou válida. Coluna especificada: '{selected_y_col}'. Filtro de ano não aplicado."
                         )
 
